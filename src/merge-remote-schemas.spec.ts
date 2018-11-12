@@ -17,8 +17,8 @@ type Foo {
 }
 
 type Query {
-  bar(id: ID!): Bar
   foo(id: ID!): Foo
+  bar(id: ID!): Bar
 }
 `;
 
@@ -26,11 +26,13 @@ describe("mergeRemoteSchemas", () => {
 
   const fooSchema = makeExecutableSchema({
     typeDefs: gql`
+      directive @merge(query: String) on OBJECT
+      directive @discard on FIELD_DEFINITION
       type Query {
         foo(id: ID!): Foo
       }
 
-      type Foo {
+      type Foo @merge(query: "foo") {
         id: ID!
         name: String!
       }
@@ -38,9 +40,6 @@ describe("mergeRemoteSchemas", () => {
     resolvers: {
       Query: {
         foo: () => ({ id: 'foo', name: 'Name' }),
-      },
-      Foo: {
-        name: () => 'Name'
       }
     }
   });
@@ -69,14 +68,12 @@ describe("mergeRemoteSchemas", () => {
     `,
     resolvers: {
       Query: {
-        bar: () => ({ id: 'bar' })
-      },
-      Bar: {
-        foo: () => ({ id: 'foo' })
+        bar: () => ({ id: 'bar', foo: { id: 'foo' }}),
+        foo: () => ({ id: 'foo', bars: [{ id: 'bar' }] })
       },
       Foo: {
         bars: () => [{ id: 'bar' }]
-      }
+      },
     }
   });
 
@@ -125,18 +122,20 @@ describe("mergeRemoteSchemas", () => {
         }
       }
     `)
-      .then((result) => expect(result).toEqual({
-        data: {
-          bar: {
-            id: 'bar',
-            foo: {
-              id: 'foo',
-              name: 'Name',
-              bars: [{ id: 'bar' }]
+      .then((result) => {
+        expect(result).toEqual({
+          data: {
+            bar: {
+              id: 'bar',
+              foo: {
+                id: 'foo',
+                name: 'Name',
+                bars: [{ id: 'bar' }]
+              }
             }
           }
-        }
-      }))
+        });
+      })
       .catch(() => fail());
   });
 });
