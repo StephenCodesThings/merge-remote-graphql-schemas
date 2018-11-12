@@ -1,6 +1,6 @@
 {
   "name": "merge-remote-graphql-schemas",
-  "version": "0.0.3",
+  "version": "0.0.7",
   "description": "Merge GraphQL remote executable schemas using directive hints",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

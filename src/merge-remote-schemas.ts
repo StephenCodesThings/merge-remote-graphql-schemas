@@ -15,12 +15,10 @@ import {
   GraphQLList,
   isNonNullType,
   isListType,
-  DirectiveNode,
   GraphQLFieldResolver,
   FieldNode,
 } from 'graphql';
 import { delegateToSchema } from 'graphql-tools';
-
 
 type MergedTypesMap = { [key: string]: GraphQLObjectType };
 
@@ -32,31 +30,17 @@ function mergeObjectTypes(
   newTypes: MergedTypesMap
 ) {
 
-  const leftMergeDirective = left.astNode && left.astNode.directives && left.astNode.directives.find((directive) => directive.name.value === "merge");
-  const rightMergeDirective = right.astNode && right.astNode.directives && right.astNode.directives.find((directive) => directive.name.value === "merge");
-
-  if (!leftMergeDirective || !rightMergeDirective) {
-    throw new Error(`Can't merge ${left.name} and ${right.name} due to missing @merge directive(s)`)
-  }
-
-  const leftFields = getUndiscardedFields(left);
-  const rightFields = getUndiscardedFields(right);
-
-  for (const key of Object.keys(rightFields)) {
-    if (leftFields[key]) {
-      throw new Error(`Can't merge ${left.name} and ${right.name} due to duplicate field "${key}"`);
-    }
-  }
+  const mergeQuery = left.name.toLowerCase();
 
   return new GraphQLObjectType({
     name: right.name || left.name,
     description: right.description || left.description,
     astNode: right.astNode || left.astNode,
     fields: () => ({ 
-      ...createFieldMapConfig(leftFields, newTypes, leftSchema, false, leftMergeDirective), 
-      ...createFieldMapConfig(rightFields, newTypes, rightSchema, false, rightMergeDirective) 
+      ...createFieldMapConfig(left.getFields(), newTypes, leftSchema, false, mergeQuery), 
+      ...createFieldMapConfig(right.getFields(), newTypes, rightSchema, false, mergeQuery)
     }),
-  })
+  });
 }
 
 function mergeRootTypes(
@@ -66,22 +50,14 @@ function mergeRootTypes(
   rightSchema: GraphQLSchema,
   newTypes: MergedTypesMap
 ) {
-  const leftFields = getUndiscardedFields(left);
-  const rightFields = getUndiscardedFields(right);
-
-  for (const key of Object.keys(rightFields)){
-    if (leftFields[key]) {
-      throw new Error(`Can't merge ${left.name} and ${right.name} due to duplicate field "${key}"`);
-    }
-  }
 
   return new GraphQLObjectType({
     name: right.name || left.name,
     description: right.description || left.description,
     astNode: right.astNode || left.astNode,
-    fields: () => ({ 
-      ...createFieldMapConfig(leftFields, newTypes, leftSchema, true), 
-      ...createFieldMapConfig(rightFields, newTypes, rightSchema, true) 
+    fields: () => ({
+      ...createFieldMapConfig(left.getFields(), newTypes, leftSchema, true),
+      ...createFieldMapConfig(right.getFields(), newTypes, rightSchema, true)
     }),
   })
 }
@@ -91,21 +67,8 @@ function recreateObjectType(type: GraphQLObjectType, schema: GraphQLSchema, merg
     name: type.name,
     description: type.description,
     astNode: type.astNode,
-    fields: () => createFieldMapConfig(getUndiscardedFields(type), mergedTypes, schema, root),
+    fields: () => createFieldMapConfig(type.getFields(), mergedTypes, schema, root),
   })
-}
-
-function getUndiscardedFields(type: GraphQLObjectType) {
-  const fields: GraphQLFieldMap<any, any> = {}
-  for (const [key, value] of Object.entries(type.getFields())) {
-    if (value.astNode && value.astNode.directives && value.astNode.directives.find((directive) => directive.name.value === "discard")) {
-      console.log("discarding: ", key)
-      continue;
-    } else {
-      fields[key] = value;
-    }
-  }
-  return fields;
 }
 
 function createFieldMapConfig(
@@ -113,14 +76,14 @@ function createFieldMapConfig(
   newTypes: MergedTypesMap,
   schema: GraphQLSchema,
   root: boolean,
-  mergeDirective?: DirectiveNode,
+  mergeQuery?: string,
 ): GraphQLFieldConfigMap<any, any> {
   const fieldsConfig: GraphQLFieldConfigMap<any, any> = {};
   for (const [key, value] of Object.entries(fields)) {
     fieldsConfig[key] = {
       type: newTypes[getNamedType(value.type).name] ? createFieldType(value.type, newTypes) : value.type,
       args: createArgumentConfig(value.args),
-      resolve: root ? createRootResolver(schema) : createFieldResolver(schema, mergeDirective),
+      resolve: root ? createRootResolver(schema) : createFieldResolver(schema, mergeQuery),
       subscribe: value.subscribe,
       deprecationReason: value.deprecationReason,
       description: value.description,
@@ -132,7 +95,6 @@ function createFieldMapConfig(
 
 function createRootResolver(schema: GraphQLSchema): GraphQLFieldResolver<any, any> {
   return (parent, args, context, info) => {
-    console.log("root resolver: ", info.fieldName)
     const request = delegateToSchema({
       schema,
       operation: info.operation.operation,
@@ -141,26 +103,16 @@ function createRootResolver(schema: GraphQLSchema): GraphQLFieldResolver<any, an
       context,
       info,
     });
-    request.then((r) => console.log("root request", JSON.stringify(r))).catch((e) => console.log("i'm erroring", e));
     return request;
   };
 }
-console.log(createRootResolver);
 
-function createFieldResolver(schema: GraphQLSchema, mergeDirective?: DirectiveNode): GraphQLFieldResolver<any, any> {
-  const mergeQueryArgument = mergeDirective && mergeDirective.arguments && mergeDirective.arguments.find((arg) => arg.name.value === "query");
-  const mergeQuery = mergeQueryArgument && mergeQueryArgument.value.kind === "StringValue" && mergeQueryArgument.value.value;
-
-  if (mergeDirective && !mergeQuery) {
-    throw new Error("Invalid merge directive");
-  }
+function createFieldResolver(schema: GraphQLSchema, mergeQuery?: string): GraphQLFieldResolver<any, any> {
 
   return (parent, args, context, info) => {
     const responseKey = info.fieldNodes[0].alias
       ? info.fieldNodes[0].alias.value
       : info.fieldName;
-
-    console.log("field resolver:", responseKey);
 
     const result = parent && parent[responseKey];
     if (result) {
@@ -189,9 +141,8 @@ function createFieldResolver(schema: GraphQLSchema, mergeDirective?: DirectiveNo
         args: mergeQuery ? { id: parent.id } : args,
         context,
         info,
-      })
-      request.then((r) => console.log("field resolver result:", JSON.stringify(r)));
-      if (mergeDirective) {
+      });
+      if (mergeQuery) {
         return request.then(result => result[responseKey]);
       } else {
         return request;

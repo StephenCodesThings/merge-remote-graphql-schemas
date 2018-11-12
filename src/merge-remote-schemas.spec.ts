@@ -26,13 +26,11 @@ describe("mergeRemoteSchemas", () => {
 
   const fooSchema = makeExecutableSchema({
     typeDefs: gql`
-      directive @merge(query: String) on OBJECT
-      directive @discard on FIELD_DEFINITION
       type Query {
         foo(id: ID!): Foo
       }
 
-      type Foo @merge(query: "foo") {
+      type Foo {
         id: ID!
         name: String!
       }
@@ -46,24 +44,19 @@ describe("mergeRemoteSchemas", () => {
 
   const directiveSchema = makeExecutableSchema({
     typeDefs: gql`
-      directive @merge(query: String) on OBJECT
-      directive @discard on FIELD_DEFINITION
-
       type Query {
         bar(id: ID!): Bar
-        foo(id: ID!): Foo @discard
+        foo(id: ID!): Foo
       }
 
       type Bar {
         id: ID!
         foo: Foo!
-        discardMe: String @discard
       }
 
-      type Foo @merge(query: "foo") {
-        id: ID! @discard
+      type Foo {
+        id: ID!
         bars: [Bar!]!
-        throwMeInTheTrash: String @discard
       }
     `,
     resolvers: {
