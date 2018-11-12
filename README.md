@@ -59,6 +59,12 @@ extend type Book {
 
 However, it's not as easy to do this across remote GraphQL schemas since you can't extend types that exist in other GraphQL services. Usually, in order to combine remote schemas that interact with each other you would need to write resolvers in your GraphQL gateway that perform the needed mappings. This library does that mapping automatically. 
 
+## Installation
+
+```
+npm install --save merge-remote-graphql-schemas
+```
+
 ## Usage
 
 In order to merge types across remote schemas there needs to be a known entry point to query information about those types in each schema. By convention this library assumes for each merged type there is a top level query that is named after the type in lowercase that accepts an id argument and returns that type. So the `Book` type needs to have a `book(id: ID!): Book` query resolver.
