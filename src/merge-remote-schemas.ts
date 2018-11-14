@@ -12,16 +12,18 @@ import {
   GraphQLObjectType,
   GraphQLOutputType,
   GraphQLSchema,
+  GraphQLUnionType,
   isListType,
   isNonNullType,
   isObjectType,
   isScalarType,
   isSpecifiedScalarType,
+  isUnionType,
 } from "graphql";
 import { delegateToSchema } from "graphql-tools";
 import { merge } from "lodash";
 
-interface NewTypesMap { [key: string]: GraphQLObjectType; }
+interface NewTypesMap { [key: string]: GraphQLNamedType; }
 
 function mergeObjectTypes({ types, newTypes }: {
   types: ObjectTypeAndSchemaArray,
@@ -194,8 +196,18 @@ function createFieldType(type: GraphQLOutputType, newTypes: NewTypesMap): GraphQ
   } else if (isListType(type)) {
     return new GraphQLList(createFieldType(type.ofType, newTypes));
   } else {
-    return newTypes[type.name];
+    return newTypes[type.name] as GraphQLOutputType;
   }
+}
+
+function recreateUnionType(type: GraphQLUnionType, newTypes: NewTypesMap) {
+  return new GraphQLUnionType({
+    name: type.name,
+    description: type.description,
+    astNode: type.astNode,
+    extensionASTNodes: type.extensionASTNodes,
+    types: type.getTypes().map((t) => (newTypes[t.name] || t) as GraphQLObjectType),
+  });
 }
 
 function createArgumentConfig(args: GraphQLArgument[]) {
@@ -245,7 +257,6 @@ export function mergeRemoteSchemas({ schemas }: { schemas: GraphQLSchema[] }) {
     }
   }
 
-  const types: GraphQLNamedType[] = [];
   for (const candidates of Object.values(typeNameToTypes)) {
     if (candidates.every(({ type }) => isTypeToInclude(type))) {
       if (candidates.every(({ type }) => isObjectType(type))) {
@@ -254,12 +265,16 @@ export function mergeRemoteSchemas({ schemas }: { schemas: GraphQLSchema[] }) {
           newTypes,
         });
         newTypes[newType.name] = newType;
-        types.push(newType);
       } else {
         if (candidates.some(({ type }) => isObjectType(type))) {
           throw new Error(`Can't merge non-Object type ${candidates[0].type.name} with Object type of same name`);
         } else {
-          types.push(candidates[0].type);
+          const type = candidates[0].type;
+          if (isUnionType(type)) {
+            newTypes[type.name] = recreateUnionType(type, newTypes);
+          } else {
+            newTypes[type.name] = type;
+          }
         }
       }
     }
@@ -268,6 +283,6 @@ export function mergeRemoteSchemas({ schemas }: { schemas: GraphQLSchema[] }) {
   return new GraphQLSchema({
     query,
     mutation,
-    types,
+    types: Object.values(newTypes),
   });
 }

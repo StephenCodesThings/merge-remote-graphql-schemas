@@ -10,6 +10,8 @@ const combinedSchema = `type Bar {
   foo: Foo!
 }
 
+union Both = Foo | Bar
+
 type Foo {
   id: ID!
   name: String!
@@ -42,12 +44,14 @@ describe("mergeRemoteSchemas", () => {
     },
   });
 
-  const directiveSchema = makeExecutableSchema({
+  const barSchema = makeExecutableSchema({
     typeDefs: gql`
       type Query {
         bar(id: ID!): Bar
         foo(id: ID!): Foo
       }
+
+      union Both = Foo | Bar
 
       type Bar {
         id: ID!
@@ -71,7 +75,7 @@ describe("mergeRemoteSchemas", () => {
   });
 
   it("should merge passed in schemas", () => {
-    const barSchema = makeExecutableSchema({
+    const independentBarSchema = makeExecutableSchema({
       typeDefs: gql`
         type Query {
           bar(id: ID!): Bar
@@ -88,19 +92,19 @@ describe("mergeRemoteSchemas", () => {
       },
     });
 
-    const mergedSchema = mergeRemoteSchemas({ schemas: [fooSchema, barSchema ]});
-    expect(mergedSchema.toString()).toEqual(mergeSchemas({ schemas: [fooSchema, barSchema]}).toString());
+    const mergedSchema = mergeRemoteSchemas({ schemas: [fooSchema, independentBarSchema ]});
+    expect(mergedSchema.toString()).toEqual(mergeSchemas({ schemas: [fooSchema, independentBarSchema]}).toString());
   });
 
-  it("should follow directives", () => {
+  it("should merge duplicate types", () => {
 
-    const mergedSchema = mergeRemoteSchemas({ schemas: [fooSchema, directiveSchema]});
+    const mergedSchema = mergeRemoteSchemas({ schemas: [fooSchema, barSchema]});
     expect(printSchema(mergedSchema)).toEqual(combinedSchema);
   });
 
   it("should answer cross-schema queries", () => {
 
-    const mergedSchema = mergeRemoteSchemas({ schemas: [fooSchema, directiveSchema]});
+    const mergedSchema = mergeRemoteSchemas({ schemas: [fooSchema, barSchema]});
     graphql(mergedSchema, `
       query {
         bar(id: "bar") {
