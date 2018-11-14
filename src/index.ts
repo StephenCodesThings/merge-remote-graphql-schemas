@@ -1,2 +1,2 @@
 
-export { mergeRemoteSchemas } from './merge-remote-schemas';
+export { mergeRemoteSchemas } from "./merge-remote-schemas";

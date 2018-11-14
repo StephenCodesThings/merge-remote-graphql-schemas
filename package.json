@@ -1,7 +1,11 @@
 {
   "name": "merge-remote-graphql-schemas",
-  "version": "0.0.7",
+  "version": "0.1.0",
   "description": "Merge GraphQL remote executable schemas using directive hints",
+  "keywords": [
+    "graphql",
+    "javascript"
+  ],
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -19,14 +23,17 @@
   },
   "homepage": "https://github.com/StephenCodesThings/merge-remote-graphql-schemas#readme",
   "dependencies": {
+    "@types/lodash": "^4.14.118",
     "graphql": "^14.0.2",
-    "graphql-tools": "^4.0.3"
+    "graphql-tools": "^4.0.3",
+    "lodash": "^4.17.11"
   },
   "devDependencies": {
     "@types/graphql": "^14.0.3",
     "@types/jasmine": "^2.8.11",
     "graphql-tag": "^2.10.0",
     "jasmine": "^3.3.0",
+    "ts-node": "^7.0.1",
     "tslint": "^5.11.0",
     "typescript": "^3.1.6"
   }

@@ -1,9 +1,9 @@
-import "jasmine";
-import gql from 'graphql-tag';
-import { makeExecutableSchema, mergeSchemas } from 'graphql-tools';
-import { mergeRemoteSchemas } from './merge-remote-schemas';
-import { printSchema } from 'graphql/utilities';
 import { graphql } from "graphql";
+import gql from "graphql-tag";
+import { makeExecutableSchema, mergeSchemas } from "graphql-tools";
+import { printSchema } from "graphql/utilities";
+import "jasmine";
+import { mergeRemoteSchemas } from "./merge-remote-schemas";
 
 const combinedSchema = `type Bar {
   id: ID!
@@ -37,9 +37,9 @@ describe("mergeRemoteSchemas", () => {
     `,
     resolvers: {
       Query: {
-        foo: () => ({ id: 'foo', name: 'Name' }),
-      }
-    }
+        foo: () => ({ id: "foo", name: "Name" }),
+      },
+    },
   });
 
   const directiveSchema = makeExecutableSchema({
@@ -61,13 +61,13 @@ describe("mergeRemoteSchemas", () => {
     `,
     resolvers: {
       Query: {
-        bar: () => ({ id: 'bar', foo: { id: 'foo' }}),
-        foo: () => ({ id: 'foo', bars: [{ id: 'bar' }] })
+        bar: () => ({ id: "bar", foo: { id: "foo" }}),
+        foo: () => ({ id: "foo", bars: [{ id: "bar" }] }),
       },
       Foo: {
-        bars: () => [{ id: 'bar' }]
+        bars: () => [{ id: "bar" }],
       },
-    }
+    },
   });
 
   it("should merge passed in schemas", () => {
@@ -76,20 +76,20 @@ describe("mergeRemoteSchemas", () => {
         type Query {
           bar(id: ID!): Bar
         }
-  
+
         type Bar {
           id: ID!
         }
       `,
       resolvers: {
         Query: {
-          bar: () => ({ id: 'bar' })
-        }
-      }
+          bar: () => ({ id: "bar" }),
+        },
+      },
     });
 
     const mergedSchema = mergeRemoteSchemas({ schemas: [fooSchema, barSchema ]});
-    expect(mergedSchema.toString()).toEqual(mergeSchemas({ schemas: [fooSchema, barSchema]}).toString())
+    expect(mergedSchema.toString()).toEqual(mergeSchemas({ schemas: [fooSchema, barSchema]}).toString());
   });
 
   it("should follow directives", () => {
@@ -119,17 +119,16 @@ describe("mergeRemoteSchemas", () => {
         expect(result).toEqual({
           data: {
             bar: {
-              id: 'bar',
+              id: "bar",
               foo: {
-                id: 'foo',
-                name: 'Name',
-                bars: [{ id: 'bar' }]
-              }
-            }
-          }
+                id: "foo",
+                name: "Name",
+                bars: [{ id: "bar" }],
+              },
+            },
+          },
         });
       })
       .catch(() => fail());
   });
 });
-
