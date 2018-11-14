@@ -22,6 +22,11 @@ type Query {
   foo(id: ID!): Foo
   bar(id: ID!): Bar
 }
+
+interface Something {
+  id: ID!
+  bar: Bar!
+}
 `;
 
 describe("mergeRemoteSchemas", () => {
@@ -52,6 +57,11 @@ describe("mergeRemoteSchemas", () => {
       }
 
       union Both = Foo | Bar
+
+      interface Something {
+        id: ID!,
+        bar: Bar!
+      }
 
       type Bar {
         id: ID!

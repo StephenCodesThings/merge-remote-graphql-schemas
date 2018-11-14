@@ -5,7 +5,9 @@ import {
   GraphQLField,
   GraphQLFieldConfigArgumentMap,
   GraphQLFieldConfigMap,
+  GraphQLFieldMap,
   GraphQLFieldResolver,
+  GraphQLInterfaceType,
   GraphQLList,
   GraphQLNamedType,
   GraphQLNonNull,
@@ -13,6 +15,7 @@ import {
   GraphQLOutputType,
   GraphQLSchema,
   GraphQLUnionType,
+  isInterfaceType,
   isListType,
   isNonNullType,
   isObjectType,
@@ -206,8 +209,32 @@ function recreateUnionType(type: GraphQLUnionType, newTypes: NewTypesMap) {
     description: type.description,
     astNode: type.astNode,
     extensionASTNodes: type.extensionASTNodes,
-    types: type.getTypes().map((t) => (newTypes[t.name] || t) as GraphQLObjectType),
+    types: () => type.getTypes().map((t) => (newTypes[t.name] || t) as GraphQLObjectType),
   });
+}
+
+function recreateInterfaceType(type: GraphQLInterfaceType, newTypes: NewTypesMap) {
+  return new GraphQLInterfaceType({
+    name: type.name,
+    description: type.description,
+    astNode: type.astNode,
+    extensionASTNodes: type.extensionASTNodes,
+    fields: () => recreateInterfaceFieldMap(type.getFields(), newTypes),
+  });
+}
+
+function recreateInterfaceFieldMap(fields: GraphQLFieldMap<any, any>, newTypes: NewTypesMap) {
+  const fieldsConfig: GraphQLFieldConfigMap<any, any> = {};
+  for (const [key, field] of Object.entries(fields)) {
+    fieldsConfig[key] = {
+      type: newTypes[getNamedType(field.type).name] ? createFieldType(field.type, newTypes) : field.type,
+      args: createArgumentConfig(field.args),
+      deprecationReason: field.deprecationReason,
+      description: field.description,
+      astNode: field.astNode,
+    };
+  }
+  return fieldsConfig;
 }
 
 function createArgumentConfig(args: GraphQLArgument[]) {
@@ -272,6 +299,8 @@ export function mergeRemoteSchemas({ schemas }: { schemas: GraphQLSchema[] }) {
           const type = candidates[0].type;
           if (isUnionType(type)) {
             newTypes[type.name] = recreateUnionType(type, newTypes);
+          } else if (isInterfaceType(type)) {
+            newTypes[type.name] = recreateInterfaceType(type, newTypes);
           } else {
             newTypes[type.name] = type;
           }
