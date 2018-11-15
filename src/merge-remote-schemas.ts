@@ -24,7 +24,7 @@ import {
   isUnionType,
 } from "graphql";
 import { delegateToSchema } from "graphql-tools";
-import { merge } from "lodash";
+import { isArray, mergeWith } from "lodash";
 
 interface NewTypesMap { [key: string]: GraphQLNamedType; }
 
@@ -132,6 +132,12 @@ function createFieldMapConfig({
   return fieldsConfig;
 }
 
+function mergeWithConcat(objValue: any, srcValue: any) {
+  if (isArray(objValue)) {
+    return objValue.concat(srcValue);
+  }
+}
+
 function createRootResolver({
   schemas,
 }: {
@@ -145,7 +151,9 @@ function createRootResolver({
       args,
       context,
       info,
-    }))).then((results) => results.reduce(merge, {}));
+    }))).then((results) => results.reduce(
+      (left, right) => mergeWith(left, right, mergeWithConcat), isArray(results) ? [] : {},
+    ));
   };
 }
 
@@ -157,7 +165,7 @@ function createFieldResolver(schema: GraphQLSchema, mergeQuery?: string): GraphQ
       : info.fieldName;
 
     const result = parent && parent[responseKey];
-    if (result) {
+    if (result !== undefined) {
       return result;
     } else {
       if (mergeQuery) {

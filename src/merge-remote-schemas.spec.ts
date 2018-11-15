@@ -18,14 +18,24 @@ type Foo {
   bars: [Bar!]!
 }
 
+type Mutation {
+  updateFoo(input: UpdateFooInput!): Foo!
+}
+
 type Query {
   foo(id: ID!): Foo
+  foos: [Foo!]!
   bar(id: ID!): Bar
 }
 
 interface Something {
   id: ID!
   bar: Bar!
+}
+
+input UpdateFooInput {
+  id: ID!
+  name: String!
 }
 `;
 
@@ -35,6 +45,16 @@ describe("mergeRemoteSchemas", () => {
     typeDefs: gql`
       type Query {
         foo(id: ID!): Foo
+        foos: [Foo!]!
+      }
+
+      type Mutation {
+        updateFoo(input: UpdateFooInput!): Foo!
+      }
+
+      input UpdateFooInput {
+        id: ID!,
+        name: String!
       }
 
       type Foo {
@@ -45,6 +65,10 @@ describe("mergeRemoteSchemas", () => {
     resolvers: {
       Query: {
         foo: () => ({ id: "foo", name: "Name" }),
+        foos: () => [{ id: "foo", name: "Name" }],
+      },
+      Mutation: {
+        updateFoo: (_, { input: { id, name } }) => ({ id, name }),
       },
     },
   });
@@ -127,6 +151,9 @@ describe("mergeRemoteSchemas", () => {
             }
           }
         }
+        foos {
+          id
+        }
       }
     `)
       .then((result) => {
@@ -139,6 +166,31 @@ describe("mergeRemoteSchemas", () => {
                 name: "Name",
                 bars: [{ id: "bar" }],
               },
+            },
+            foos: [ { id: "foo" }],
+          },
+        });
+      })
+      .catch(() => fail());
+  });
+
+  it("should perform mutations", () => {
+
+    const mergedSchema = mergeRemoteSchemas({ schemas: [fooSchema, barSchema]});
+    graphql(mergedSchema, `
+      mutation updateFoo($input: UpdateFooInput!) {
+        updateFoo(input: $input) {
+          id
+          name
+        }
+      }
+    `, null, null, { input: { id: "foo", name: "something" } })
+      .then((result) => {
+        expect(result).toEqual({
+          data: {
+            updateFoo: {
+              id: "foo",
+              name: "something",
             },
           },
         });
