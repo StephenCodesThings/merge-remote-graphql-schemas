@@ -12,10 +12,20 @@ const combinedSchema = `type Bar {
 
 union Both = Foo | Bar
 
-type Foo {
+type Foo implements FooB & FooA {
   id: ID!
   name: String!
+  b: String!
   bars: [Bar!]!
+  a: String!
+}
+
+interface FooA {
+  a: String!
+}
+
+interface FooB {
+  b: String!
 }
 
 type Mutation {
@@ -57,9 +67,14 @@ describe("mergeRemoteSchemas", () => {
         name: String!
       }
 
-      type Foo {
+      interface FooB {
+        b: String!
+      }
+
+      type Foo implements FooB {
         id: ID!
         name: String!
+        b: String!
       }
     `,
     resolvers: {
@@ -92,18 +107,24 @@ describe("mergeRemoteSchemas", () => {
         foo: Foo!
       }
 
-      type Foo {
+      interface FooA {
+        a: String!
+      }
+
+      type Foo implements FooA {
         id: ID!
         bars: [Bar!]!
+        a: String!
       }
     `,
     resolvers: {
       Query: {
         bar: () => ({ id: "bar", foo: { id: "foo" }}),
-        foo: () => ({ id: "foo", bars: [{ id: "bar" }] }),
+        foo: () => ({ id: "foo", bars: [{ id: "bar" }], a: "A" }),
       },
       Foo: {
         bars: () => [{ id: "bar" }],
+        a: () => "A",
       },
     },
   });
@@ -149,6 +170,9 @@ describe("mergeRemoteSchemas", () => {
             bars {
               id
             }
+            ... on FooA {
+              a
+            }
           }
         }
         foos {
@@ -165,6 +189,7 @@ describe("mergeRemoteSchemas", () => {
                 id: "foo",
                 name: "Name",
                 bars: [{ id: "bar" }],
+                a: "A",
               },
             },
             foos: [ { id: "foo" }],

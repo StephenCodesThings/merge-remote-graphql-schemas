@@ -38,9 +38,27 @@ function mergeObjectTypes({ types, newTypes }: {
   return new GraphQLObjectType({
     name: types.map((type) => type.type.name).filter((name) => name)[0],
     description: types.map((type) => type.type.description).filter((d) => d)[0],
+    isTypeOf: types.map((type) => type.type.isTypeOf).filter((a) => a)[0],
     astNode: types.map((type) => type.type.astNode).filter((a) => a)[0],
+    extensionASTNodes: types.map((type) => type.type.extensionASTNodes).filter((a) => a)[0],
     fields: () => createFieldMapConfig({ types, newTypes, mergeQuery }),
+    interfaces: () => mergeInterfaces({ types: types.map((type) => type.type), newTypes }),
   });
+}
+
+function mergeInterfaces({ types, newTypes }: {
+  types: GraphQLObjectType[],
+  newTypes: NewTypesMap,
+}) {
+  const interfaceMap: { [key: string]: GraphQLInterfaceType } = {};
+  for (const type of types) {
+    for (const i of type.getInterfaces()) {
+      if (!interfaceMap[i.name]) {
+        interfaceMap[i.name] = newTypes[i.name] ? newTypes[i.name] as GraphQLInterfaceType : i;
+      }
+    }
+  }
+  return Object.values(interfaceMap);
 }
 
 type NamedTypeAndSchemaArray = Array<{ schema: GraphQLSchema, type: GraphQLNamedType}>;
