@@ -200,8 +200,7 @@ describe("mergeRemoteSchemas", () => {
   });
 
   it("should perform mutations", () => {
-
-    const mergedSchema = mergeRemoteSchemas({ schemas: [fooSchema, barSchema]});
+    const mergedSchema = mergeRemoteSchemas({ schemas: [barSchema], localSchema: fooSchema});
     graphql(mergedSchema, `
       mutation updateFoo($input: UpdateFooInput!) {
         updateFoo(input: $input) {

@@ -24,7 +24,7 @@ import {
   isUnionType,
 } from "graphql";
 import { delegateToSchema } from "graphql-tools";
-import { isArray, mergeWith } from "lodash";
+import { isArray, merge, mergeWith } from "lodash";
 
 interface NewTypesMap { [key: string]: GraphQLNamedType; }
 
@@ -61,8 +61,8 @@ function mergeInterfaces({ types, newTypes }: {
   return Object.values(interfaceMap);
 }
 
-type NamedTypeAndSchemaArray = Array<{ schema: GraphQLSchema, type: GraphQLNamedType}>;
-type ObjectTypeAndSchemaArray = Array<{ schema: GraphQLSchema, type: GraphQLObjectType}>;
+type NamedTypeAndSchemaArray = Array<{ schema: GraphQLSchema, type: GraphQLNamedType, replaceResolvers: boolean }>;
+type ObjectTypeAndSchemaArray = Array<{ schema: GraphQLSchema, type: GraphQLObjectType, replaceResolvers: boolean }>;
 
 function mergeRootTypes({ types, newTypes }: {
   types: ObjectTypeAndSchemaArray,
@@ -128,26 +128,49 @@ function createFieldMapConfig({
   newTypes: NewTypesMap,
   mergeQuery: string,
 }): GraphQLFieldConfigMap<any, any> {
-  const fields: { [key: string]: { schema: GraphQLSchema, field: GraphQLField<any, any> } } = {};
-  for (const { type, schema } of types) {
+  const fields: {
+    [key: string]: { schema: GraphQLSchema, field: GraphQLField<any, any>, replaceResolvers: boolean },
+  } = {};
+  for (const { type, schema, replaceResolvers } of types) {
     for (const [key, field] of Object.entries(type.getFields())) {
       if (!fields[key]) {
-        fields[key] = { schema, field };
+        fields[key] = { schema, field, replaceResolvers };
       }
     }
   }
   const fieldsConfig: GraphQLFieldConfigMap<any, any> = {};
-  for (const [key, { field, schema }] of Object.entries(fields)) {
+  for (const [key, { field, schema, replaceResolvers }] of Object.entries(fields)) {
     fieldsConfig[key] = {
       type: newTypes[getNamedType(field.type).name] ? createFieldType(field.type, newTypes) : field.type,
       args: createArgumentConfig(field.args),
-      resolve: createFieldResolver(schema, mergeQuery),
+      resolve: replaceResolvers ?
+        createFieldResolver(schema, mergeQuery) :
+        createLocalFieldResolver({ resolve: field.resolve, field }),
       deprecationReason: field.deprecationReason,
       description: field.description,
       astNode: field.astNode,
     };
   }
   return fieldsConfig;
+}
+
+function createLocalFieldResolver({
+  field,
+  resolve,
+}: {
+  field: GraphQLField<any, any>,
+  resolve?: GraphQLFieldResolver<any, any>,
+}): GraphQLFieldResolver<any, any> | undefined {
+  if (!resolve) {
+    return undefined;
+  }
+  return async (parent, args, context, info) => {
+    const result = await resolve(parent, args, context, info);
+    return merge(
+      parent,
+      { [field.name]: result },
+    )[field.name];
+  };
 }
 
 function mergeWithConcat(objValue: any, srcValue: any) {
@@ -170,7 +193,7 @@ function createRootResolver({
       context,
       info,
     }))).then((results) => results.reduce(
-      (left, right) => mergeWith(left, right, mergeWithConcat), isArray(results) ? [] : {},
+      (left, right) => mergeWith(right, left, mergeWithConcat), isArray(results) ? [] : {},
     ));
   };
 }
@@ -284,29 +307,45 @@ function isTypeToInclude(type: GraphQLNamedType) {
     (!isScalarType(type) || (isScalarType(type) && !isSpecifiedScalarType(type)));
 }
 
-export function mergeRemoteSchemas({ schemas }: { schemas: GraphQLSchema[] }) {
+export function mergeRemoteSchemas({
+  schemas,
+  localSchema,
+}: {
+  schemas: GraphQLSchema[],
+  localSchema?: GraphQLSchema,
+}) {
 
   const newTypes: NewTypesMap = {};
 
-  const queryTypes = schemas.map((schema) => ({ schema, type: schema.getQueryType() }));
+  const allSchemas = localSchema ? [localSchema, ...schemas] : schemas;
+
+  const queryTypes = allSchemas.map((schema) => ({ schema, type: schema.getQueryType() }));
   const query = mergeRootTypes({
     types: queryTypes.filter((argument) => argument.type) as ObjectTypeAndSchemaArray,
     newTypes,
   });
 
-  const mutationTypes = schemas.map((schema) => ({ schema, type: schema.getMutationType() }));
+  const mutationTypes = allSchemas.map((schema) => ({ schema, type: schema.getMutationType() }));
   const mutation = mergeRootTypes({
     types: mutationTypes.filter((argument) => argument.type) as ObjectTypeAndSchemaArray,
     newTypes,
   });
 
   const typeNameToTypes: { [key: string]: NamedTypeAndSchemaArray } = {};
+  if (localSchema) {
+    for (const [key, type] of Object.entries(localSchema.getTypeMap())) {
+      if (!typeNameToTypes[key]) {
+        typeNameToTypes[key] = [];
+      }
+      typeNameToTypes[key].push({ schema: localSchema, type, replaceResolvers: false });
+    }
+  }
   for (const schema of schemas) {
     for (const [key, type] of Object.entries(schema.getTypeMap())) {
       if (!typeNameToTypes[key]) {
         typeNameToTypes[key] = [];
       }
-      typeNameToTypes[key].push({ schema, type });
+      typeNameToTypes[key].push({ schema, type, replaceResolvers: true });
     }
   }
 
