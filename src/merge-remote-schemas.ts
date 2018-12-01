@@ -24,7 +24,7 @@ import {
   isUnionType,
 } from "graphql";
 import { delegateToSchema } from "graphql-tools";
-import { isArray, merge, mergeWith } from "lodash";
+import { camelCase, isArray, merge, mergeWith } from "lodash";
 
 interface NewTypesMap { [key: string]: GraphQLNamedType; }
 
@@ -33,7 +33,7 @@ function mergeObjectTypes({ types, newTypes }: {
   newTypes: NewTypesMap,
 }) {
 
-  const mergeQuery = types[0].type.name.toLowerCase();
+  const mergeQuery = camelCase(types[0].type.name);
 
   return new GraphQLObjectType({
     name: types.map((type) => type.type.name).filter((name) => name)[0],

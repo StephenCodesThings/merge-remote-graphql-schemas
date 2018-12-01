@@ -67,7 +67,7 @@ npm install --save merge-remote-graphql-schemas
 
 ## Usage
 
-In order to merge types across remote schemas there needs to be a known entry point to query information about those types in each schema. By convention this library assumes for each merged type there is a top level query that is named after the type in lowercase that accepts an id argument and returns that type. So the `Book` type needs to have a `book(id: ID!): Book` query resolver.
+In order to merge types across remote schemas there needs to be a known entry point to query information about those types in each schema. By convention this library assumes for each merged type there is a top level query that is named after the type in lowerCamelCase that accepts an id argument and returns that type. So the `Book` type needs to have a `book(id: ID!): Book` query resolver.
 
 If a type doesn't have any cross-schema interactions then it doesn't need to meet this requirement. 
 
