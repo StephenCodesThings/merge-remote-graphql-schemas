@@ -24,7 +24,7 @@ import {
   isUnionType,
 } from "graphql";
 import { delegateToSchema } from "graphql-tools";
-import { camelCase, isArray, merge, mergeWith } from "lodash";
+import { camelCase, concat, isArray, isObject, keyBy, merge } from "lodash";
 
 interface NewTypesMap { [key: string]: GraphQLNamedType; }
 
@@ -173,9 +173,25 @@ function createLocalFieldResolver({
   };
 }
 
-function mergeWithConcat(objValue: any, srcValue: any) {
-  if (isArray(objValue)) {
-    return objValue.concat(srcValue);
+function combine(results: any[]): any {
+  if (results.every((result) => isArray(result))) {
+    if (results.every((result) => result.every((item: any) => item.id))) {
+      return Object.values(combine(
+        results.map((result) => keyBy(result, "id")),
+      ));
+    } else {
+      return concat([], ...results);
+    }
+  } else if (results.every((result) => isObject(result))) {
+    return merge(
+      {},
+      ...concat([], ...results.map((result) => Object.keys(result)))
+        .map((key) => ({
+          [key]: combine(results.map((result) => result[key]).filter((value) => value !== undefined)),
+        })),
+    );
+  } else {
+    return results[0];
   }
 }
 
@@ -192,9 +208,7 @@ function createRootResolver({
       args,
       context,
       info,
-    }))).then((results) => results.reduce(
-      (left, right) => mergeWith(right, left, mergeWithConcat), isArray(results) ? [] : {},
-    ));
+    }))).then((results) => combine(results));
   };
 }
 
