@@ -64,10 +64,9 @@ function mergeInterfaces({ types, newTypes }: {
 type NamedTypeAndSchemaArray = Array<{ schema: GraphQLSchema, type: GraphQLNamedType, replaceResolvers: boolean }>;
 type ObjectTypeAndSchemaArray = Array<{ schema: GraphQLSchema, type: GraphQLObjectType, replaceResolvers: boolean }>;
 
-function mergeRootTypes({ types, newTypes, isMutation }: {
+function mergeRootTypes({ types, newTypes }: {
   types: ObjectTypeAndSchemaArray,
   newTypes: NewTypesMap,
-  isMutation: boolean,
 }) {
 
   if (types.length === 0) {
@@ -77,7 +76,7 @@ function mergeRootTypes({ types, newTypes, isMutation }: {
       name: types.map((type) => type.type.name).filter((name) => name)[0],
       description: types.map((type) => type.type.description).filter((d) => d)[0],
       astNode: types.map((type) => type.type.astNode).filter((a) => a)[0],
-      fields: () => createRootFieldMapConfig({ types, newTypes, isMutation }),
+      fields: () => createRootFieldMapConfig({ types, newTypes }),
     });
   }
 }
@@ -85,11 +84,9 @@ function mergeRootTypes({ types, newTypes, isMutation }: {
 function createRootFieldMapConfig({
   types,
   newTypes,
-  isMutation,
 }: {
   types: ObjectTypeAndSchemaArray,
   newTypes: NewTypesMap,
-  isMutation: boolean,
 }) {
   const fields: { [key: string]: Array<{ schema: GraphQLSchema, field: GraphQLField<any, any> }> } = {};
   for (const { type, schema } of types) {
@@ -108,7 +105,7 @@ function createRootFieldMapConfig({
     fieldsConfig[key] = {
       type: newTypes[getNamedType(fieldType).name] ? createFieldType(fieldType, newTypes) : fieldType,
       args: createArgumentConfig(getCandidateAttribute(Object.values(fieldCandidates), "args")),
-      resolve: isMutation ? createRootMutationResolver({ schema: schemas[0] }) : createRootQueryResolver({ schemas }),
+      resolve: createRootResolver({ schema: schemas[0] }),
       deprecationReason: getCandidateAttribute(Object.values(fieldCandidates), "deprecationReason"),
       description: getCandidateAttribute(Object.values(fieldCandidates), "description"),
       astNode: getCandidateAttribute(Object.values(fieldCandidates), "astNode"),
@@ -169,10 +166,10 @@ function createLocalFieldResolver({
   }
   return async (parent, args, context, info) => {
     const result = await resolve(parent, args, context, info);
-    return merge(
-      parent,
+    return combine([
       { [field.name]: result },
-    )[field.name];
+      parent,
+    ])[field.name];
   };
 }
 
@@ -198,24 +195,7 @@ function combine(results: any[]): any {
   }
 }
 
-function createRootQueryResolver({
-  schemas,
-}: {
-  schemas: GraphQLSchema[],
-}): GraphQLFieldResolver<any, any> {
-  return (parent, args, context, info) => {
-    return Promise.all(schemas.map((schema) => delegateToSchema({
-      schema,
-      operation: info.operation.operation,
-      fieldName: info.fieldName,
-      args,
-      context,
-      info,
-    }))).then((results) => combine(results));
-  };
-}
-
-function createRootMutationResolver({
+function createRootResolver({
   schema,
 }: {
   schema: GraphQLSchema,
@@ -268,7 +248,7 @@ function createFieldResolver(schema: GraphQLSchema, mergeQuery?: string): GraphQ
         info,
       });
       if (mergeQuery) {
-        return request.then((requestResult) => requestResult[responseKey]);
+        return request.then((requestResult) => requestResult ? requestResult[responseKey] : null);
       } else {
         return request;
       }
@@ -357,14 +337,12 @@ export function mergeRemoteSchemas({
   const query = mergeRootTypes({
     types: queryTypes.filter((argument) => argument.type) as ObjectTypeAndSchemaArray,
     newTypes,
-    isMutation: false,
   });
 
   const mutationTypes = allSchemas.map((schema) => ({ schema, type: schema.getMutationType() }));
   const mutation = mergeRootTypes({
     types: mutationTypes.filter((argument) => argument.type) as ObjectTypeAndSchemaArray,
     newTypes,
-    isMutation: true,
   });
 
   const typeNameToTypes: { [key: string]: NamedTypeAndSchemaArray } = {};
