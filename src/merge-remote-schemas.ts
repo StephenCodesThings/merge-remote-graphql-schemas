@@ -22,8 +22,10 @@ import {
   isScalarType,
   isSpecifiedScalarType,
   isUnionType,
+  GraphQLFormattedError,
 } from "graphql";
 import { delegateToSchema } from "graphql-tools";
+import { ERROR_SYMBOL } from "graphql-tools/dist/stitching/errors";
 import { camelCase, concat, isArray, isObject, keyBy, merge } from "lodash";
 
 interface NewTypesMap { [key: string]: GraphQLNamedType; }
@@ -221,6 +223,26 @@ function createFieldResolver(schema: GraphQLSchema, mergeQuery?: string): GraphQ
 
     const result = parent && parent[responseKey];
     if (result !== undefined) {
+      const subErrors = parent[ERROR_SYMBOL] && parent[ERROR_SYMBOL]
+        .filter((error: GraphQLFormattedError) => error.path && error.path[0] === responseKey)
+        .map(({ message, locations, path }: GraphQLFormattedError) => ({ message, locations, path: path && path.slice(1) }));
+
+      const fieldError = (subErrors || []).filter((error: GraphQLFormattedError) => error.path && error.path.length === 0);
+      if (fieldError.length > 0) {
+        throw fieldError[0].message;
+      }
+      if (subErrors && subErrors.length > 0) {
+        if (Array.isArray(result)) {
+          for (const { message, locations, path } of subErrors) {
+            if (!result[path[0]][ERROR_SYMBOL]) {
+              result[path[0]][ERROR_SYMBOL] = [];
+            }
+            result[path[0]][ERROR_SYMBOL].push({ message, locations, path: path.slice(1) });
+          }
+        } else {
+          result[ERROR_SYMBOL] = subErrors;
+        }
+      }
       return result;
     } else {
       if (mergeQuery) {
