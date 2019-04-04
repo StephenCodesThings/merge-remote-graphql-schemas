@@ -26,7 +26,7 @@ import {
 } from "graphql";
 import { delegateToSchema } from "graphql-tools";
 import { ERROR_SYMBOL } from "graphql-tools/dist/stitching/errors";
-import { camelCase, concat, isArray, isObject, keyBy, merge } from "lodash";
+import { camelCase } from "lodash";
 
 interface NewTypesMap { [key: string]: GraphQLNamedType; }
 
@@ -70,7 +70,6 @@ function mergeRootTypes({ types, newTypes }: {
   types: ObjectTypeAndSchemaArray,
   newTypes: NewTypesMap,
 }) {
-
   if (types.length === 0) {
     return undefined;
   } else {
@@ -147,54 +146,13 @@ function createFieldMapConfig({
       args: createArgumentConfig(field.args),
       resolve: replaceResolvers ?
         createFieldResolver(schema, mergeQuery) :
-        createLocalFieldResolver({ resolve: field.resolve, field }),
+        field.resolve,
       deprecationReason: field.deprecationReason,
       description: field.description,
       astNode: field.astNode,
     };
   }
   return fieldsConfig;
-}
-
-function createLocalFieldResolver({
-  field,
-  resolve,
-}: {
-  field: GraphQLField<any, any>,
-  resolve?: GraphQLFieldResolver<any, any>,
-}): GraphQLFieldResolver<any, any> | undefined {
-  if (!resolve) {
-    return undefined;
-  }
-  return async (parent, args, context, info) => {
-    const result = await resolve(parent, args, context, info);
-    return combine([
-      { [field.name]: result },
-      parent,
-    ])[field.name];
-  };
-}
-
-function combine(results: any[]): any {
-  if (results.every((result) => isArray(result))) {
-    if (results.every((result) => result.every((item: any) => item.id))) {
-      return Object.values(combine(
-        results.map((result) => keyBy(result, "id")),
-      ));
-    } else {
-      return concat([], ...results);
-    }
-  } else if (results.every((result) => isObject(result))) {
-    return merge(
-      {},
-      ...concat([], ...results.map((result) => Object.keys(result)))
-        .map((key) => ({
-          [key]: combine(results.map((result) => result[key]).filter((value) => value !== undefined)),
-        })),
-    );
-  } else {
-    return results[0];
-  }
 }
 
 function createRootResolver({
