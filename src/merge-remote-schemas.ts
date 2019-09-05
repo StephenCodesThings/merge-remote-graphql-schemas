@@ -253,6 +253,7 @@ function recreateUnionType(type: GraphQLUnionType, newTypes: NewTypesMap) {
     astNode: type.astNode,
     extensionASTNodes: type.extensionASTNodes,
     types: () => type.getTypes().map((t) => (newTypes[t.name] || t) as GraphQLObjectType),
+    resolveType: type.resolveType,
   });
 }
 
