@@ -28,7 +28,9 @@ import {
   isObjectType,
   isScalarType,
   isSpecifiedScalarType,
-  isUnionType
+  isUnionType,
+  ValueNode,
+  Kind
 } from "graphql";
 import { delegateToSchema } from "graphql-tools";
 import { ERROR_SYMBOL } from "graphql-tools/dist/stitching/errors";
@@ -361,8 +363,38 @@ function recreateScalarType(type: GraphQLScalarType) {
     },
     parseValue(value: any) {
       return value;
+    },
+    parseLiteral(ast: ValueNode) {
+      return parseLiteral(ast);
     }
   });
+}
+
+function parseLiteral(ast: ValueNode): any {
+  switch (ast.kind) {
+    case Kind.STRING:
+    case Kind.BOOLEAN: {
+      return ast.value;
+    }
+    case Kind.INT:
+    case Kind.FLOAT: {
+      return parseFloat(ast.value);
+    }
+    case Kind.OBJECT: {
+      const value: { [key: string]: any } = {};
+
+      for (const field of ast.fields) {
+        value[field.name.value] = parseLiteral(field.value);
+      }
+
+      return value;
+    }
+    case Kind.LIST: {
+      return ast.values.map(parseLiteral);
+    }
+    default:
+      return null;
+  }
 }
 
 function recreateInputType(
